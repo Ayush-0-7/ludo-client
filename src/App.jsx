@@ -278,7 +278,7 @@
 //           className={`${COLOR_CLASSES[color].fill}`}
 //         />
 //       ))}
-      
+
 //       {/* Main Track Path */}
 //       {TRACK_PATH.map((pos, i) => (
 //         <rect key={`track-${i}`}
@@ -470,7 +470,7 @@
 //       setMessage("Invalid tester value. Please enter a number between 1 and 6.");
 //       return;
 //     }
-    
+
 //     setTestDiceValue("");
 //     setMessage(`Tester dice set to ${value}.`);
 //     processDiceRoll(value);
@@ -478,7 +478,7 @@
 
 //   const endTurn = (extraTurn) => {
 //     if (!game) return;
-    
+
 //     const w = getWinner(game);
 //     if (w) {
 //         setWinner(w);
@@ -633,10 +633,10 @@
 //                     const { x, y } = tokenCoord(p.color, t, ti);
 //                     const isSelectable = selectableTokens.has(ti) && p.color === activePlayer.color;
 //                     return (
-//                         <motion.g 
-//                           key={`${p.color}-${ti}`} 
+//                         <motion.g
+//                           key={`${p.color}-${ti}`}
 //                           initial={{ x: x, y: y }}
-//                           animate={{ x: x, y: y }} 
+//                           animate={{ x: x, y: y }}
 //                           transition={{ type: "tween", duration: 0.2, ease: "linear" }}
 //                           className="pointer-events-auto"
 //                         >
@@ -699,7 +699,7 @@
 //             <div className="mt-auto flex flex-col gap-4">
 //                 {winner && (
 //                     <div className="p-4 bg-yellow-300 rounded-xl text-center font-bold text-2xl text-yellow-900 shadow-inner">
-//                             {winner.name} Wins! 
+//                             {winner.name} Wins!
 //                     </div>
 //                 )}
 //                 <button className="w-full py-3 rounded-xl bg-black text-white text-xl font-bold shadow-lg hover:bg-neutral-800 transition transform hover:scale-105" onClick={reset}>
@@ -713,7 +713,7 @@
 //   );
 // }
 
-//2nd - Break the app code into component . 
+//2nd - Break the app code into component .
 // import React, { useMemo, useState } from "react";
 // import { motion, AnimatePresence } from "framer-motion";
 
@@ -797,7 +797,7 @@
 //             setMessage("Invalid tester value. Please enter a number between 1 and 6.");
 //             return;
 //         }
-        
+
 //         setTestDiceValue("");
 //         setMessage(`Tester dice set to ${value}.`);
 //         processDiceRoll(value);
@@ -805,7 +805,7 @@
 
 //     const endTurn = (extraTurn) => {
 //         if (!game) return;
-        
+
 //         const w = getWinner(game);
 //         if (w) {
 //             setWinner(w);
@@ -1034,72 +1034,108 @@
 //         </div>
 //     );
 // }
-import React, { useState, useEffect } from 'react';
-import io from 'socket.io-client';
-import OnlineSetup from './components/OnlineSetup';
-import Lobby from './components/Lobby';
-import GameScreen from './components/GameScreen';
-import * as SoundManager from './utils/SoundManager';
+import React, { useState, useEffect } from "react";
+import io from "socket.io-client";
+import { v4 as uuidv4 } from "uuid"; // Import uuid
 
+import OnlineSetup from "./components/OnlineSetup";
+import Lobby from "./components/Lobby";
+import GameScreen from "./components/GameScreen";
+import * as SoundManager from "./utils/SoundManager";
+
+// Your server URL
 const socket = io("https://ludo-server-production.up.railway.app/");
+// const socket = io("https://qnl5mx-4000.csb.app/");
+
+// Function to get or create a persistent user ID
+const getUserId = () => {
+  let userId = localStorage.getItem("ludoUserId");
+  if (!userId) {
+    userId = uuidv4();
+    localStorage.setItem("ludoUserId", userId);
+  }
+  return userId;
+};
 
 export default function App() {
-    const [gameState, setGameState] = useState(null);
-    const [error, setError] = useState('');
+  const [gameState, setGameState] = useState(null);
+  const [error, setError] = useState("");
+  const [userId] = useState(getUserId()); // Get or create the user's persistent ID on load
 
-    useEffect(() => {
-        const handleGameStateUpdate = (newGameState) => {
-            setGameState(newGameState);
-            setError('');
-        };
-        const handleError = (errorMessage) => {
-            setError(errorMessage);
-        };
+  useEffect(() => {
+    // --- Reconnection Logic ---
+    const roomId = localStorage.getItem("ludoRoomId");
+    if (roomId && userId) {
+      socket.emit("reconnectGame", { roomId, userId });
+    }
 
-        socket.on('gameStateUpdate', handleGameStateUpdate);
-        socket.on('error', handleError);
-
-        return () => {
-            socket.off('gameStateUpdate', handleGameStateUpdate);
-            socket.off('error', handleError);
-        };
-    }, []);
-
-    useEffect(() => {
-        if (gameState?.status === 'playing') {
-            SoundManager.playBackgroundMusic();
-        } else {
-            SoundManager.stopBackgroundMusic();
-        }
-    }, [gameState?.status]);
-
-    const renderContent = () => {
-        if (error) {
-             return (
-                <div className="w-full h-screen flex flex-col items-center justify-center">
-                    <OnlineSetup socket={socket} />
-                    <p className="mt-4 p-4 bg-red-200 text-red-800 rounded-lg shadow-md">{error}</p>
-                </div>
-             );
-        }
-        
-        if (!gameState) {
-            return <OnlineSetup socket={socket} />;
-        }
-        
-        if (gameState.status === 'lobby') {
-            return <Lobby gameState={gameState} socket={socket} />;
-        }
-        
-        if (gameState.status === 'playing' || gameState.status === 'finished') {
-            return <GameScreen gameState={gameState} socket={socket} />;
-        }
+    const handleGameStateUpdate = (newGameState) => {
+      setGameState(newGameState);
+      // Store the current room ID to enable reconnection on refresh
+      localStorage.setItem("ludoRoomId", newGameState.roomId);
+      setError("");
+    };
+    const handleError = (errorMessage) => {
+      setError(errorMessage);
     };
 
-    return (
-        // CHANGE: Replaced 'bg-neutral-100' with 'bg-casino-pattern bg-repeat'
-       <div className="w-full min-h-screen bg-[url('/casino-image.jpg')] bg-repeat flex flex-col items-center justify-center p-4 gap-4 font-sans">
-  {renderContent()}
-</div>
-    );
+    socket.on("gameStateUpdate", handleGameStateUpdate);
+    socket.on("error", handleError);
+
+    return () => {
+      socket.off("gameStateUpdate", handleGameStateUpdate);
+      socket.off("error", handleError);
+    };
+  }, [userId]); // Dependency array ensures this runs once on load
+
+  useEffect(() => {
+    if (gameState?.status === "playing") {
+      SoundManager.playBackgroundMusic();
+    } else {
+      SoundManager.stopBackgroundMusic();
+    }
+
+    // --- Cleanup Logic ---
+    // If the game is finished, remove the roomId from local storage
+    if (gameState?.status === "finished") {
+      localStorage.removeItem("ludoRoomId");
+    }
+  }, [gameState]);
+
+  const renderContent = () => {
+    if (error) {
+      return (
+        <div className="w-full h-screen flex flex-col items-center justify-center">
+          {/* Pass userId to OnlineSetup */}
+          <OnlineSetup socket={socket} userId={userId} />
+          <p className="mt-4 p-4 bg-red-200 text-red-800 rounded-lg shadow-md">
+            {error}
+          </p>
+        </div>
+      );
+    }
+
+    if (!gameState) {
+      // Pass userId to OnlineSetup
+      return <OnlineSetup socket={socket} userId={userId} />;
+    }
+
+    if (gameState.status === "lobby") {
+      // Pass userId to Lobby
+      return <Lobby gameState={gameState} socket={socket} userId={userId} />;
+    }
+
+    if (gameState.status === "playing" || gameState.status === "finished") {
+      // Pass userId to GameScreen
+      return (
+        <GameScreen gameState={gameState} socket={socket} userId={userId} />
+      );
+    }
+  };
+
+  return (
+    <div className="w-full min-h-screen bg-[url('/casino-image.jpg')] bg-repeat flex flex-col items-center justify-center p-4 gap-4 font-sans">
+      {renderContent()}
+    </div>
+  );
 }
