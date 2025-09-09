@@ -1043,8 +1043,8 @@ import Lobby from "./components/Lobby";
 import GameScreen from "./components/GameScreen";
 import * as SoundManager from "./utils/SoundManager";
 
-// const socket = io("https://ludo-server-production.up.railway.app/");
-const socket = io("https://575gqy-4000.csb.app/");
+const socket = io("https://ludo-server-production.up.railway.app/");
+// const socket = io("https://575gqy-4000.csb.app/");
 
 const getUserId = () => {
   let userId = localStorage.getItem("ludoUserId");
