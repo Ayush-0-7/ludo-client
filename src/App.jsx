@@ -1036,18 +1036,16 @@
 // }
 import React, { useState, useEffect } from "react";
 import io from "socket.io-client";
-import { v4 as uuidv4 } from "uuid"; // Import uuid
+import { v4 as uuidv4 } from "uuid";
 
 import OnlineSetup from "./components/OnlineSetup";
 import Lobby from "./components/Lobby";
 import GameScreen from "./components/GameScreen";
 import * as SoundManager from "./utils/SoundManager";
 
-// Your server URL
-const socket = io("https://ludo-server-production.up.railway.app/");
-// const socket = io("https://qnl5mx-4000.csb.app/");
+// const socket = io("https://ludo-server-production.up.railway.app/");
+const socket = io("https://575gqy-4000.csb.app/");
 
-// Function to get or create a persistent user ID
 const getUserId = () => {
   let userId = localStorage.getItem("ludoUserId");
   if (!userId) {
@@ -1060,10 +1058,23 @@ const getUserId = () => {
 export default function App() {
   const [gameState, setGameState] = useState(null);
   const [error, setError] = useState("");
-  const [userId] = useState(getUserId()); // Get or create the user's persistent ID on load
+  const [userId] = useState(getUserId());
+
+  // --- NEW: Function to handle leaving a game ---
+  const leaveGame = () => {
+    const roomId = localStorage.getItem("ludoRoomId");
+    if (roomId && userId) {
+      // Notify the server that this user is leaving
+      socket.emit("leaveGame", { roomId, userId });
+    }
+    // CRITICAL: Clear the room from local storage
+    localStorage.removeItem("ludoRoomId");
+    // Reset the client-side state to go back to the setup screen
+    setGameState(null);
+    setError("");
+  };
 
   useEffect(() => {
-    // --- Reconnection Logic ---
     const roomId = localStorage.getItem("ludoRoomId");
     if (roomId && userId) {
       socket.emit("reconnectGame", { roomId, userId });
@@ -1071,12 +1082,15 @@ export default function App() {
 
     const handleGameStateUpdate = (newGameState) => {
       setGameState(newGameState);
-      // Store the current room ID to enable reconnection on refresh
       localStorage.setItem("ludoRoomId", newGameState.roomId);
       setError("");
     };
     const handleError = (errorMessage) => {
       setError(errorMessage);
+      // If we get an error, it might be because the room doesn't exist anymore.
+      // Clear the bad room ID from storage.
+      localStorage.removeItem("ludoRoomId");
+      setGameState(null); // Go back to setup screen
     };
 
     socket.on("gameStateUpdate", handleGameStateUpdate);
@@ -1086,7 +1100,7 @@ export default function App() {
       socket.off("gameStateUpdate", handleGameStateUpdate);
       socket.off("error", handleError);
     };
-  }, [userId]); // Dependency array ensures this runs once on load
+  }, [userId]);
 
   useEffect(() => {
     if (gameState?.status === "playing") {
@@ -1095,18 +1109,15 @@ export default function App() {
       SoundManager.stopBackgroundMusic();
     }
 
-    // --- Cleanup Logic ---
-    // If the game is finished, remove the roomId from local storage
     if (gameState?.status === "finished") {
       localStorage.removeItem("ludoRoomId");
     }
   }, [gameState]);
 
   const renderContent = () => {
-    if (error) {
+    if (error && !gameState) {
       return (
         <div className="w-full h-screen flex flex-col items-center justify-center">
-          {/* Pass userId to OnlineSetup */}
           <OnlineSetup socket={socket} userId={userId} />
           <p className="mt-4 p-4 bg-red-200 text-red-800 rounded-lg shadow-md">
             {error}
@@ -1116,19 +1127,30 @@ export default function App() {
     }
 
     if (!gameState) {
-      // Pass userId to OnlineSetup
       return <OnlineSetup socket={socket} userId={userId} />;
     }
 
     if (gameState.status === "lobby") {
-      // Pass userId to Lobby
-      return <Lobby gameState={gameState} socket={socket} userId={userId} />;
+      // Pass the leaveGame function as a prop
+      return (
+        <Lobby
+          gameState={gameState}
+          socket={socket}
+          userId={userId}
+          onLeave={leaveGame}
+        />
+      );
     }
 
     if (gameState.status === "playing" || gameState.status === "finished") {
-      // Pass userId to GameScreen
+      // Pass the leaveGame function as a prop
       return (
-        <GameScreen gameState={gameState} socket={socket} userId={userId} />
+        <GameScreen
+          gameState={gameState}
+          socket={socket}
+          userId={userId}
+          onLeave={leaveGame}
+        />
       );
     }
   };

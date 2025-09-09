@@ -1,14 +1,12 @@
 import React from "react";
 import { COLOR_CLASSES } from "../config/constants";
 
-// Receive userId as a prop
-export default function Lobby({ gameState, socket, userId }) {
-  // Check for the host using the persistent userId
+// Receive onLeave prop
+export default function Lobby({ gameState, socket, userId, onLeave }) {
   const isHost = userId === gameState.hostId;
 
   const handleStartGame = () => {
     if (isHost && gameState.players.length >= 2) {
-      // Include userId in the payload for validation
       socket.emit("startGame", { roomId: gameState.roomId, userId });
     }
   };
@@ -63,6 +61,14 @@ export default function Lobby({ gameState, socket, userId }) {
           Waiting for the host to start the game...
         </p>
       )}
+
+      {/* NEW: Leave Lobby Button */}
+      <button
+        onClick={onLeave}
+        className="w-full mt-4 py-2 rounded-xl bg-red-500 text-white text-lg font-bold shadow-lg hover:bg-red-600 transition"
+      >
+        Leave Lobby
+      </button>
     </div>
   );
 }

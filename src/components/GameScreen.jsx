@@ -18,6 +18,7 @@ import {
 } from "../config/constants";
 import { legalMovesForPlayer, mod } from "../logic/gameLogic";
 
+// usePrevious and calculatePath functions remain the same...
 const usePrevious = (value) => {
   const ref = useRef();
   useEffect(() => {
@@ -26,9 +27,7 @@ const usePrevious = (value) => {
   return ref.current;
 };
 
-// --- Animation Logic (No changes needed here) ---
 const calculatePath = (player, startToken, endToken, diceValue) => {
-  // ... (This function remains unchanged)
   const path = [];
   if (startToken.state === "base" || endToken.state === "done") {
     path.push(endToken);
@@ -48,7 +47,6 @@ const calculatePath = (player, startToken, endToken, diceValue) => {
     } else {
       const homeLanePos = currentTotalSteps - homeEntryRelSteps;
       if (homeLanePos <= 6) {
-        // HOME_LEN
         path.push({
           state: homeLanePos === 6 ? "done" : "home",
           pos: homeLanePos,
@@ -67,23 +65,22 @@ const calculatePath = (player, startToken, endToken, diceValue) => {
   return path;
 };
 
-// Receive userId as a prop
-export default function GameScreen({ gameState, socket, userId }) {
+// Receive onLeave prop
+export default function GameScreen({ gameState, socket, userId, onLeave }) {
   const [animatedPlayers, setAnimatedPlayers] = useState(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const previousGameState = usePrevious(gameState);
 
+  // The useEffect hooks for animation and state sync remain the same...
   useEffect(() => {
     if (!animatedPlayers || isAnimating === false) {
       setAnimatedPlayers(JSON.parse(JSON.stringify(gameState.players)));
     }
   }, [gameState]);
 
-  // Main animation effect (No changes to logic, only how it's triggered)
   useEffect(() => {
     if (!previousGameState || !animatedPlayers || !gameState || isAnimating)
       return;
-
     let movedTokenInfo = null;
     for (const [pIdx, player] of gameState.players.entries()) {
       for (const [tIdx, token] of player.tokens.entries()) {
@@ -100,13 +97,11 @@ export default function GameScreen({ gameState, socket, userId }) {
       }
       if (movedTokenInfo) break;
     }
-
     if (movedTokenInfo) {
       const { pIdx, tIdx, startToken, endToken } = movedTokenInfo;
       const player = gameState.players[pIdx];
       const diceValue = previousGameState.diceValue;
       const path = calculatePath(player, startToken, endToken, diceValue);
-
       const runAnimation = async () => {
         setIsAnimating(true);
         if (path.length <= 1) {
@@ -141,10 +136,8 @@ export default function GameScreen({ gameState, socket, userId }) {
     }
   }, [gameState, previousGameState, animatedPlayers, isAnimating]);
 
-  // Find the player using the persistent userId
   const myPlayer = gameState.players.find((p) => p.userId === userId);
   const activePlayer = gameState.players[gameState.activeIdx];
-  // Check for turn using userId
   const isMyTurn = myPlayer && myPlayer.userId === activePlayer.userId;
 
   const legal = useMemo(() => {
@@ -159,7 +152,6 @@ export default function GameScreen({ gameState, socket, userId }) {
   const rollDice = () => {
     if (isAnimating) return;
     SoundManager.playDiceRoll();
-    // Include userId in the payload
     socket.emit("rollDice", { roomId: gameState.roomId, userId });
   };
 
@@ -170,7 +162,6 @@ export default function GameScreen({ gameState, socket, userId }) {
         (legalMove) => JSON.stringify(legalMove) === JSON.stringify(mv)
       )
     ) {
-      // Include userId in the payload
       socket.emit("makeMove", { roomId: gameState.roomId, move: mv, userId });
     }
   };
@@ -192,7 +183,6 @@ export default function GameScreen({ gameState, socket, userId }) {
 
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row gap-6 sm:gap-8 items-center">
-      {/* --- Board --- */}
       <div className="flex-[2] relative w-full mx-auto aspect-square max-w-[500px] sm:max-w-[600px] md:max-w-none">
         <LudoBoard />
         <svg
@@ -204,7 +194,6 @@ export default function GameScreen({ gameState, socket, userId }) {
               animatedPlayers.map((p) =>
                 p.tokens.map((t, ti) => {
                   const { x, y } = tokenCoord(p.color, t, ti);
-                  // Check for selectable tokens using userId
                   const isSelectable =
                     selectableTokens.has(ti) &&
                     p.userId === activePlayer.userId &&
@@ -238,15 +227,13 @@ export default function GameScreen({ gameState, socket, userId }) {
           </AnimatePresence>
         </svg>
       </div>
-
-      {/* --- Controller --- */}
       <div className="flex-[1] bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl p-4 sm:p-6 flex flex-col gap-3 sm:gap-5 w-full md:w-auto text-sm sm:text-base">
         <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-          {gameState.players.map((p, i) => (
+          {gameState.players.map((p) => (
             <PlayerBadge
               key={p.userId}
               p={p}
-              active={i === gameState.activeIdx && !gameState.winner}
+              active={p.userId === activePlayer.userId && !gameState.winner}
             />
           ))}
         </div>
@@ -265,7 +252,6 @@ export default function GameScreen({ gameState, socket, userId }) {
               gameState.winner ||
               isAnimating
             }
-            className="w-16 h-16 sm:w-20 sm:h-20"
           />
           <p className="h-10 sm:h-12 text-neutral-700 font-medium text-base sm:text-lg px-4">
             {isAnimating ? "Moving..." : gameState.message}
@@ -277,6 +263,15 @@ export default function GameScreen({ gameState, socket, userId }) {
             <div className="p-3 sm:p-4 bg-yellow-300 rounded-xl text-center font-bold text-xl sm:text-2xl text-yellow-900 shadow-inner">
               {gameState.winner.name} Wins!
             </div>
+          )}
+          {/* NEW: Leave Game Button */}
+          {gameState.status !== "finished" && (
+            <button
+              onClick={onLeave}
+              className="text-center text-sm text-neutral-500 hover:text-neutral-800 transition"
+            >
+              Leave Game
+            </button>
           )}
         </div>
       </div>
